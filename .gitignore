@@ -139,6 +139,9 @@ mobile/.pub/
 
 # Web related
 mobile/lib/generated_plugin_registrant.dart
+mobile/build/
+# Exception: Allow web-deploy directory
+!web-deploy/
 
 # Exceptions to above rules.
 !mobile/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
