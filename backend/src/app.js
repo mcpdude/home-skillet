@@ -68,13 +68,16 @@ if (process.env.NODE_ENV === 'development') {
 
 // Health check endpoints
 app.get('/health', (req, res) => {
+  console.log('🩺 Health check requested');
   res.status(200).json({
     success: true,
     data: {
       message: 'Home Skillet API is running',
       timestamp: new Date().toISOString(),
       version: process.env.API_VERSION || 'v1',
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
+      port: process.env.PORT
     }
   });
 });
