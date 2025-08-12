@@ -45,24 +45,27 @@ const config = {
   },
   production: {
     client: 'pg',
-    connection: {
+    connection: process.env.SUPABASE_DB_URL || {
       host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
       port: 5432,
       database: 'postgres',
       user: 'postgres',
-      password: process.env.SUPABASE_DB_URL?.match(/postgres:([^@]+)@/)?.[1] || 'lk5FPenvv8yk4nqY',
+      password: 'lk5FPenvv8yk4nqY',
       ssl: { rejectUnauthorized: false },
     },
     pool: {
       min: 1,
-      max: 10,
-      acquireTimeoutMillis: 30000,
+      max: 5,
+      acquireTimeoutMillis: 20000,
       idleTimeoutMillis: 300000,
       createTimeoutMillis: 10000,
       destroyTimeoutMillis: 5000,
       reapIntervalMillis: 1000,
       createRetryIntervalMillis: 200,
     },
+    // Force IPv4 for Railway
+    asyncStackTraces: false,
+    acquireConnectionTimeout: 20000,
     migrations: {
       directory: __dirname + '/../migrations',
       tableName: 'knex_migrations'
