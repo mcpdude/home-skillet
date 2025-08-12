@@ -18,36 +18,10 @@ if (!hasDbConfig) {
   process.exit(1);
 }
 
-// Run database migrations if in production
-if (process.env.NODE_ENV === 'production') {
-  console.log('🔄 Running database migrations...');
-  console.log('🔗 Connecting to Supabase database...');
-  
-  // Run migrations directly without pre-testing connection
-  const migrate = spawn('npx', ['knex', 'migrate:latest', '--env', 'production'], {
-    stdio: 'inherit',
-    env: process.env,
-    cwd: __dirname
-  });
-
-  migrate.on('error', (error) => {
-    console.error('❌ Migration process error:', error);
-    process.exit(1);
-  });
-
-  migrate.on('close', (code) => {
-    if (code === 0) {
-      console.log('✅ Database migrations completed successfully');
-      startServer();
-    } else {
-      console.error(`❌ Migration process exited with code ${code}`);
-      process.exit(1);
-    }
-  });
-} else {
-  // Development mode - start server directly
-  startServer();
-}
+// Skip migrations for now and start server directly
+console.log('🚀 Starting server without migrations...');
+console.log('⚠️  Note: Run migrations manually if needed');
+startServer();
 
 function startServer() {
   console.log('🚀 Starting server...');
