@@ -1,7 +1,7 @@
 {
   "name": "home-skillet-backend",
   "version": "1.0.0",
-  "description": "Backend API for Home Skillet property management application",
+  "description": "Backend API for Home Skillet property management application with fixed dependencies",
   "main": "src/server.js",
   "scripts": {
     "start": "node start.js",
