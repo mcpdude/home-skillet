@@ -45,12 +45,12 @@ const config = {
   },
   production: {
     client: 'pg',
-    connection: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || {
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+    connection: {
+      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+      port: 5432,
+      database: 'postgres',
+      user: 'postgres',
+      password: process.env.SUPABASE_DB_URL?.match(/postgres:([^@]+)@/)?.[1] || 'lk5FPenvv8yk4nqY',
       ssl: { rejectUnauthorized: false },
     },
     pool: {

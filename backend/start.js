@@ -29,7 +29,13 @@ if (process.env.NODE_ENV === 'production') {
       const { Client } = require('pg');
       const client = new Client({
         connectionString: process.env.SUPABASE_DB_URL,
-        ssl: { rejectUnauthorized: false }
+        ssl: { rejectUnauthorized: false },
+        // Force IPv4 to avoid Railway IPv6 issues
+        host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+        port: 5432,
+        database: 'postgres',
+        user: 'postgres',
+        password: 'lk5FPenvv8yk4nqY'
       });
       
       console.log('🔍 Testing database connection...');
