@@ -1,0 +1,12 @@
+{
+  "name": "home-skillet-mobile",
+  "buildCommand": "flutter build web",
+  "outputDirectory": "build/web",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
