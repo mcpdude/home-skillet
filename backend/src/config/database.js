@@ -26,18 +26,14 @@ const config = {
     }
   },
   test: {
-    client: 'pg',
-    connection: process.env.SUPABASE_DB_URL_TEST || {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || 'home_skillet_test',
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      ssl: false,
+    client: 'sqlite3',
+    connection: {
+      filename: ':memory:'
     },
+    useNullAsDefault: true,
     pool: {
       min: 1,
-      max: 5,
+      max: 1,
     },
     migrations: {
       directory: __dirname + '/../migrations',

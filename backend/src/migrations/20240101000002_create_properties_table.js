@@ -4,7 +4,14 @@
  */
 exports.up = function(knex) {
   return knex.schema.createTable('properties', function (table) {
-    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+    if (knex.client.config.client === 'sqlite3') {
+      table.string('id').primary();
+      table.string('owner_id').notNullable();
+    } else {
+      table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+      table.integer('owner_id').unsigned().notNullable();
+    }
+    
     table.string('name', 200).notNullable();
     table.text('description');
     table.string('address', 500).notNullable();
@@ -14,13 +21,12 @@ exports.up = function(knex) {
     table.integer('square_feet');
     table.decimal('lot_size', 10, 2);
     table.integer('year_built');
-    table.integer('owner_id').unsigned().notNullable();
     table.timestamps(true, true);
     
     // Foreign key constraint
     table.foreign('owner_id').references('id').inTable('users').onDelete('CASCADE');
     
-    // Supabase-specific optimizations
+    // Indexes for efficient queries
     table.index(['owner_id'], 'idx_properties_owner_id');
     table.index(['type'], 'idx_properties_type');
     table.index(['created_at'], 'idx_properties_created_at');

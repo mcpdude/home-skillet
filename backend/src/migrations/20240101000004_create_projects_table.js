@@ -4,8 +4,16 @@
  */
 exports.up = function(knex) {
   return knex.schema.createTable('projects', function (table) {
-    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('property_id').notNullable();
+    if (knex.client.config.client === 'sqlite3') {
+      table.string('id').primary();
+      table.string('property_id').notNullable();
+      table.string('created_by').notNullable();
+    } else {
+      table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+      table.uuid('property_id').notNullable();
+      table.integer('created_by').unsigned().notNullable();
+    }
+    
     table.string('title', 200).notNullable();
     table.text('description');
     table.string('status', 50).notNullable().defaultTo('pending'); // pending, in_progress, completed, cancelled
@@ -15,14 +23,13 @@ exports.up = function(knex) {
     table.date('start_date');
     table.date('end_date');
     table.date('due_date');
-    table.integer('created_by').unsigned().notNullable();
     table.timestamps(true, true);
     
     // Foreign key constraints
     table.foreign('property_id').references('id').inTable('properties').onDelete('CASCADE');
     table.foreign('created_by').references('id').inTable('users').onDelete('CASCADE');
     
-    // Supabase-specific optimizations
+    // Indexes for efficient queries
     table.index(['property_id'], 'idx_projects_property_id');
     table.index(['status'], 'idx_projects_status');
     table.index(['priority'], 'idx_projects_priority');

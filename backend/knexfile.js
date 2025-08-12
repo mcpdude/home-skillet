@@ -26,19 +26,9 @@ module.exports = {
     }
   },
   test: {
-    client: 'pg',
-    connection: process.env.SUPABASE_DB_URL_TEST || {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || 'home_skillet_test',
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      ssl: false,
-    },
-    pool: {
-      min: 1,
-      max: 5,
-    },
+    client: 'sqlite3',
+    connection: ':memory:',
+    useNullAsDefault: true,
     migrations: {
       directory: './src/migrations',
       tableName: 'knex_migrations'
