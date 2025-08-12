@@ -13,6 +13,7 @@
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:status": "knex migrate:status",
+    "railway:migrate": "node railway-migrate.js",
     "seed": "knex seed:run",
     "db:setup": "npm run migrate && npm run seed"
   },
