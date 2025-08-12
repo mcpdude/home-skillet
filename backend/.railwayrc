@@ -1,0 +1,8 @@
+# Railway configuration for IPv4 database connections
+export DATABASE_URL="postgresql://postgres:lk5FPenvv8yk4nqY@db.yrkbpbwwewjjdmsspifl.supabase.co:5432/postgres"
+export PGHOST="db.yrkbpbwwewjjdmsspifl.supabase.co"
+export PGPORT="5432"
+export PGDATABASE="postgres"
+export PGUSER="postgres"
+export PGPASSWORD="lk5FPenvv8yk4nqY"
+export PGSSLMODE="require"

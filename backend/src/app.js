@@ -66,26 +66,9 @@ if (process.env.NODE_ENV === 'development') {
   app.use(requestLogger);
 }
 
-// Health check endpoints - minimal, no database dependency
+// Health check endpoints - completely minimal, no dependencies
 app.get('/health', (req, res) => {
-  console.log('🩺 Health check requested');
-  try {
-    res.status(200).json({
-      success: true,
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      version: process.env.API_VERSION || 'v1'
-    });
-  } catch (error) {
-    console.error('❌ Health check error:', error);
-    res.status(500).json({
-      success: false,
-      status: 'unhealthy',
-      error: error.message
-    });
-  }
+  res.json({ status: 'ok', timestamp: Date.now() });
 });
 
 // Root endpoint for Railway health checks
