@@ -1,0 +1,16 @@
+{
+  "name": "home-skillet",
+  "version": "1.0.0",
+  "description": "Home Skillet Property Management Application",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev",
+    "install": "cd backend && npm install",
+    "build": "cd backend && npm install --production"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
