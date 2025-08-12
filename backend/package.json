@@ -36,6 +36,7 @@
     "knex": "^3.1.0",
     "multer": "^2.0.2",
     "pg": "^8.11.3",
+    "sharp": "^0.34.3",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

@@ -1,7 +1,4 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
@@ -10,61 +7,12 @@ const {
   createResponse, 
   createErrorResponse
 } = require('../utils/helpers');
+const { uploadDocument } = require('../middleware/supabaseUpload');
 
 const router = express.Router();
 
-// Configure multer for document uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/documents';
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    cb(null, 'doc-' + uniqueSuffix + extension);
-  }
-});
-
-// File filter for documents
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/jpg', 
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-    'text/csv'
-  ];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('File type not allowed. Supported types: PDF, Images, Word, Excel, Text, CSV'), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
-  }
-});
-
-// Helper function to calculate file hash
-function calculateFileHash(filePath) {
-  const fileBuffer = fs.readFileSync(filePath);
+// Helper function to calculate file hash from buffer
+function calculateFileHash(fileBuffer) {
   const hashSum = crypto.createHash('sha256');
   hashSum.update(fileBuffer);
   return hashSum.digest('hex');
@@ -139,7 +87,7 @@ async function logDocumentAccess(documentId, userId, action, req) {
  * POST /api/v1/documents/upload
  * Upload a new document
  */
-router.post('/upload', authenticate, upload.single('document'), async (req, res) => {
+router.post('/upload', authenticate, uploadDocument, async (req, res) => {
   try {
     const { 
       title,
@@ -157,23 +105,13 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
       metadata
     } = req.body;
     
-    if (!req.file) {
-      return res.status(400).json(createResponse(false, null, {
-        message: 'No document file provided'
-      }));
-    }
-
     if (!title || !document_type) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
       return res.status(400).json(createResponse(false, null, {
         message: 'Title and document type are required'
       }));
     }
 
     if (!property_id && !project_id) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
       return res.status(400).json(createResponse(false, null, {
         message: 'Document must be associated with either a property or project'
       }));
@@ -182,17 +120,13 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
     // Validate user access
     const hasAccess = await validateAccess(req.user.id, property_id, project_id);
     if (!hasAccess) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
       return res.status(403).json(createResponse(false, null, {
         message: 'Access denied to the specified property or project'
       }));
     }
 
-    // Calculate file hash for duplicate detection
-    const fileHash = calculateFileHash(req.file.path);
-
-    // Check for existing document with same hash
+    // Check for existing document with same hash (already calculated by middleware)
+    const fileHash = req.uploadedDocument.file_hash;
     const existingDoc = await db('documents')
       .where('file_hash', fileHash)
       .where(function() {
@@ -202,8 +136,6 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
       .first();
 
     if (existingDoc) {
-      // Clean up uploaded file since it's a duplicate
-      fs.unlinkSync(req.file.path);
       return res.status(409).json(createResponse(false, null, {
         message: 'A document with identical content already exists',
         existing_document: existingDoc
@@ -230,7 +162,7 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
       }
     }
 
-    // Save document record to database
+    // Save document record to database (using Supabase uploaded file data)
     const documentId = uuidv4();
     const documentData = {
       id: documentId,
@@ -247,12 +179,12 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
       document_date: document_date || null,
       expiry_date: expiry_date || null,
       metadata: JSON.stringify(parsedMetadata),
-      filename: req.file.filename,
-      original_filename: req.file.originalname,
-      file_path: req.file.path,
-      file_url: `/uploads/documents/${req.file.filename}`,
-      file_size: req.file.size,
-      mime_type: req.file.mimetype,
+      filename: req.uploadedDocument.filename,
+      original_filename: req.uploadedDocument.originalname,
+      file_path: req.uploadedDocument.file_path,
+      file_url: req.uploadedDocument.file_url,
+      file_size: req.uploadedDocument.file_size,
+      mime_type: req.uploadedDocument.mime_type,
       file_hash: fileHash,
       tags: JSON.stringify(parsedTags),
       status: 'active',
@@ -310,11 +242,6 @@ router.post('/upload', authenticate, upload.single('document'), async (req, res)
     }));
 
   } catch (error) {
-    // Clean up uploaded file on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
     console.error('Document upload error:', error);
 
     if (error.message.includes('File type not allowed')) {

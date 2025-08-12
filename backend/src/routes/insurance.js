@@ -1,7 +1,4 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
@@ -9,48 +6,10 @@ const {
   createResponse, 
   createErrorResponse
 } = require('../utils/helpers');
+const { uploadInsurancePhotos } = require('../middleware/supabaseUpload');
+const { deleteFromSupabase, STORAGE_BUCKETS, getTransformedImageUrl } = require('../config/supabaseStorage');
 
 const router = express.Router();
-
-// Configure multer for insurance item photos
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/insurance';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    cb(null, 'item-' + uniqueSuffix + extension);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = [
-    'image/jpeg',
-    'image/jpg', 
-    'image/png',
-    'image/gif',
-    'image/webp'
-  ];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed for insurance item photos'), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 25 * 1024 * 1024, // 25MB limit for high-res photos
-  }
-});
 
 // Helper function to validate property access
 async function validatePropertyAccess(userId, propertyId) {
@@ -674,34 +633,33 @@ router.delete('/items/:id', authenticate, async (req, res) => {
 
 /**
  * POST /api/v1/insurance/items/:id/photos
- * Upload photos for an insurance item
+ * Upload photos for an insurance item to Supabase Storage
  */
-router.post('/items/:id/photos', authenticate, upload.array('photos', 10), async (req, res) => {
+router.post('/items/:id/photos', authenticate, uploadInsurancePhotos, async (req, res) => {
   try {
     const itemId = req.params.id;
-    const { photo_type = 'overview', descriptions, titles } = req.body;
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json(createResponse(false, null, {
-        message: 'No photo files provided'
-      }));
-    }
+    const { photo_types, descriptions, titles } = req.body;
 
     // Validate access
     const item = await validateItemAccess(req.user.id, itemId);
     if (!item) {
-      // Clean up uploaded files
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      });
       return res.status(404).json(createResponse(false, null, {
         message: 'Insurance item not found or access denied'
       }));
     }
 
-    // Parse descriptions and titles if provided as JSON arrays
+    // Parse photo types, descriptions and titles if provided as JSON arrays
+    let parsedPhotoTypes = [];
     let parsedDescriptions = [];
     let parsedTitles = [];
+    
+    if (photo_types) {
+      try {
+        parsedPhotoTypes = typeof photo_types === 'string' ? JSON.parse(photo_types) : photo_types;
+      } catch (e) {
+        parsedPhotoTypes = [photo_types];
+      }
+    }
     
     if (descriptions) {
       try {
@@ -721,24 +679,24 @@ router.post('/items/:id/photos', authenticate, upload.array('photos', 10), async
 
     const uploadedPhotos = [];
     
-    // Process each uploaded file
-    for (let i = 0; i < req.files.length; i++) {
-      const file = req.files[i];
+    // Process each uploaded file (already uploaded to Supabase by middleware)
+    for (let i = 0; i < req.uploadedPhotos.length; i++) {
+      const uploadedPhoto = req.uploadedPhotos[i];
       const photoId = uuidv4();
       
       const photoData = {
         id: photoId,
         item_id: itemId,
         uploaded_by: req.user.id,
-        photo_type: Array.isArray(photo_type) ? photo_type[i] || 'overview' : photo_type,
-        title: parsedTitles[i] || file.originalname,
+        photo_type: parsedPhotoTypes[i] || 'overview',
+        title: parsedTitles[i] || uploadedPhoto.originalname,
         description: parsedDescriptions[i] || null,
-        filename: file.filename,
-        original_filename: file.originalname,
-        file_path: file.path,
-        file_url: `/uploads/insurance/${file.filename}`,
-        file_size: file.size,
-        mime_type: file.mimetype,
+        filename: uploadedPhoto.filename,
+        original_filename: uploadedPhoto.originalname,
+        file_path: uploadedPhoto.file_path,
+        file_url: uploadedPhoto.file_url,
+        file_size: uploadedPhoto.file_size,
+        mime_type: uploadedPhoto.mime_type,
         display_order: i,
         is_primary: i === 0, // First photo is primary by default
         created_at: new Date(),
@@ -764,18 +722,12 @@ router.post('/items/:id/photos', authenticate, upload.array('photos', 10), async
 
     res.status(201).json(createResponse(true, {
       uploaded_photos: uploadedPhotos,
-      total_uploaded: uploadedPhotos.length
+      total_uploaded: uploadedPhotos.length,
+      message: `Successfully uploaded ${uploadedPhotos.length} photos to cloud storage`
     }));
 
   } catch (error) {
-    // Clean up uploaded files on error
-    if (req.files) {
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      });
-    }
-
-    console.error('Insurance item photo upload error:', error);
+    console.error('Insurance photo upload error:', error);
     return res.status(500).json(createResponse(false, null, {
       message: 'Internal server error'
     }));
