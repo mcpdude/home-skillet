@@ -66,7 +66,7 @@ if (process.env.NODE_ENV === 'development') {
   app.use(requestLogger);
 }
 
-// Health check endpoint
+// Health check endpoints
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -75,6 +75,19 @@ app.get('/health', (req, res) => {
       timestamp: new Date().toISOString(),
       version: process.env.API_VERSION || 'v1',
       environment: process.env.NODE_ENV || 'development'
+    }
+  });
+});
+
+// Root endpoint for Railway health checks
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Home Skillet API is running',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      api: `/api/${process.env.API_VERSION || 'v1'}`
     }
   });
 });
