@@ -1,6 +1,6 @@
 class ApiConfig {
   // Backend API Configuration
-  static const String baseUrl = 'http://localhost:5000/api'; // Updated for project management backend
+  static const String baseUrl = 'https://web-production-8014.up.railway.app/api'; // Railway production deployment
   static const String apiVersion = 'v1';
   
   // Traditional REST API Endpoints (Node.js backend)

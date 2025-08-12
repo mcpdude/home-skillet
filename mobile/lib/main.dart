@@ -61,7 +61,7 @@ class _AuthScreenState extends State<AuthScreen> {
             };
 
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/v1/auth/$endpoint'),
+        Uri.parse('https://web-production-8014.up.railway.app/api/v1/auth/$endpoint'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(body),
       );
@@ -92,7 +92,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } catch (e) {
       setState(() {
-        _message = 'Network error. Make sure backend is running on localhost:5000';
+        _message = 'Network error. Please check your internet connection';
       });
     } finally {
       setState(() {
@@ -233,7 +233,7 @@ class _MainScreenState extends State<MainScreen> {
     try {
       // Load properties
       final propertiesResponse = await http.get(
-        Uri.parse('http://localhost:5000/api/v1/properties'),
+        Uri.parse('https://web-production-8014.up.railway.app/api/v1/properties'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
@@ -242,7 +242,7 @@ class _MainScreenState extends State<MainScreen> {
 
       // Load projects
       final projectsResponse = await http.get(
-        Uri.parse('http://localhost:5000/api/v1/projects'),
+        Uri.parse('https://web-production-8014.up.railway.app/api/v1/projects'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
@@ -341,7 +341,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _createProperty(String name, String address, String type) async {
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/v1/properties'),
+        Uri.parse('https://web-production-8014.up.railway.app/api/v1/properties'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
@@ -447,7 +447,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _createProject(String title, String description, int propertyId) async {
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/api/v1/projects'),
+        Uri.parse('https://web-production-8014.up.railway.app/api/v1/projects'),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
