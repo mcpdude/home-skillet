@@ -15,10 +15,10 @@ const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
 const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
-const photoRoutes = require('./routes/photos');
+// const photoRoutes = require('./routes/photos'); // Temporarily disabled for Railway deployment
 const reportRoutes = require('./routes/reports');
-const documentRoutes = require('./routes/documents');
-const insuranceRoutes = require('./routes/insurance');
+// const documentRoutes = require('./routes/documents'); // Temporarily disabled - uses multer
+// const insuranceRoutes = require('./routes/insurance'); // Temporarily disabled - uses multer
 
 const app = express();
 
@@ -156,9 +156,9 @@ app.use(`/api/${apiVersion}/tasks`, taskRoutes);
 app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/maintenance-schedules`, maintenanceRoutes);
 app.use(`/api/${apiVersion}/reports`, reportRoutes);
-app.use(`/api/${apiVersion}/documents`, documentRoutes);
-app.use(`/api/${apiVersion}/insurance`, insuranceRoutes);
-app.use(`/api/${apiVersion}`, photoRoutes);
+// app.use(`/api/${apiVersion}/documents`, documentRoutes); // Temporarily disabled
+// app.use(`/api/${apiVersion}/insurance`, insuranceRoutes); // Temporarily disabled
+// app.use(`/api/${apiVersion}`, photoRoutes); // Temporarily disabled
 
 // Handle 404 errors
 app.use(notFoundHandler);

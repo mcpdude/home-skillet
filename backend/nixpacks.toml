@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ['nodejs-18_x', 'npm-9_x']
+
+[phases.install]
+cmds = [
+  'npm ci --omit=dev --verbose'
+]
+
+[phases.build]
+cmds = [
+  'echo "Build phase - dependencies should be installed"',
+  'ls -la node_modules | head -20'
+]
+
+[start]
+cmd = 'node src/server.js'
