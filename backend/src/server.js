@@ -1,5 +1,5 @@
 const app = require('./app');
-const { initializeStorageBuckets } = require('./config/supabaseStorage');
+// const { initializeStorageBuckets } = require('./config/supabaseStorage'); // Disabled for Railway deployment
 
 const PORT = process.env.PORT || 3000;
 
@@ -12,21 +12,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🗄️  Database URL configured: ${process.env.SUPABASE_DB_URL ? 'Yes' : 'No'}`);
   console.log(`🪣 Supabase URL configured: ${process.env.SUPABASE_URL ? 'Yes' : 'No'}`);
   
-  // Skip Supabase Storage initialization on Railway to avoid startup delays
-  if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'production') {
-    setTimeout(async () => {
-      try {
-        console.log('🔄 Initializing Supabase Storage buckets...');
-        await initializeStorageBuckets();
-        console.log('✅ Supabase Storage initialized successfully');
-      } catch (error) {
-        console.warn('⚠️  Storage initialization failed, continuing without buckets:', error.message);
-        // App continues to work, storage buckets can be created manually if needed
-      }
-    }, 2000);
-  } else if (process.env.NODE_ENV === 'production') {
-    console.log('🚀 Production mode: Skipping Supabase Storage initialization during startup');
-  }
+  // Supabase Storage initialization disabled for Railway deployment
+  console.log('🚀 Production mode: Supabase Storage initialization disabled for Railway deployment');
 });
 
 // Handle server startup errors
