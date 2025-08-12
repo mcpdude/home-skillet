@@ -14,6 +14,7 @@ const propertyRoutes = require('./routes/properties');
 const projectRoutes = require('./routes/projects');
 const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
+const photoRoutes = require('./routes/photos');
 
 const app = express();
 
@@ -53,6 +54,9 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static files (uploaded photos)
+app.use('/uploads', express.static('uploads'));
+
 // Request logging (only in development)
 if (process.env.NODE_ENV === 'development') {
   app.use(requestLogger);
@@ -78,6 +82,7 @@ app.use(`/api/${apiVersion}/properties`, propertyRoutes);
 app.use(`/api/${apiVersion}/projects`, projectRoutes);
 app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/maintenance-schedules`, maintenanceRoutes);
+app.use(`/api/${apiVersion}`, photoRoutes);
 
 // Handle 404 errors
 app.use(notFoundHandler);
