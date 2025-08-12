@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +12,8 @@ import '../../providers/property_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../utils/form_validators.dart';
+import '../../services/photo_service.dart';
+import '../../services/storage_service.dart';
 
 class AddEditPropertyScreen extends StatefulWidget {
   final String? propertyId;
@@ -40,12 +44,15 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
   PropertyType _selectedType = PropertyType.house;
   Property? _originalProperty;
   List<String> _imageUrls = [];
+  List<Map<String, dynamic>> _uploadedPhotos = []; // Store actual photo data
   bool _isLoading = false;
   String? _errorMessage;
+  late PhotoService _photoService;
 
   @override
   void initState() {
     super.initState();
+    _photoService = PhotoService(storageService: StorageService());
     if (widget.isEdit && widget.propertyId != null) {
       _loadPropertyData();
     } else if (widget.preselectedType != null) {
@@ -65,7 +72,7 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
     super.dispose();
   }
 
-  void _loadPropertyData() {
+  void _loadPropertyData() async {
     final propertyProvider = context.read<PropertyProvider>();
     _originalProperty = propertyProvider.getPropertyById(widget.propertyId!);
     
@@ -79,6 +86,26 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
       _bathroomsController.text = _originalProperty!.bathrooms?.toString() ?? '';
       _selectedType = _originalProperty!.type;
       _imageUrls = List.from(_originalProperty!.imageUrls);
+      
+      // Load photos from server
+      await _loadPropertyPhotos();
+    }
+  }
+
+  Future<void> _loadPropertyPhotos() async {
+    try {
+      final photos = await _photoService.getPropertyPhotos(widget.propertyId!);
+      if (mounted) {
+        setState(() {
+          _uploadedPhotos = photos;
+          _imageUrls = photos
+              .map((photo) => _photoService.getPhotoUrl(photo['url'] as String))
+              .toList();
+        });
+      }
+    } catch (e) {
+      // Silently fail for now - photos are optional
+      print('Error loading photos: $e');
     }
   }
 
@@ -459,29 +486,11 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
                         height: 120,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: NetworkImage(_imageUrls[index]),
-                            fit: BoxFit.cover,
-                            onError: (error, stackTrace) {
-                              // Handle image load error
-                            },
-                          ),
                         ),
-                        child: _imageUrls[index].startsWith('http')
-                            ? null
-                            : Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade300,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.image,
-                                    size: 32,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: _buildImageWidget(_imageUrls[index]),
+                        ),
                       ),
                       Positioned(
                         top: 4,
@@ -529,7 +538,84 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
     }
   }
 
+  Widget _buildImageWidget(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      // Network image
+      return Image.network(
+        imagePath,
+        width: 100,
+        height: 120,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey.shade300,
+            child: Icon(
+              Icons.broken_image,
+              size: 32,
+              color: Colors.grey.shade600,
+            ),
+          );
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: Colors.grey.shade200,
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      // Local file
+      if (kIsWeb) {
+        // Web doesn't support File.fromPath
+        return Container(
+          color: Colors.grey.shade300,
+          child: Icon(
+            Icons.image,
+            size: 32,
+            color: Colors.grey.shade600,
+          ),
+        );
+      } else {
+        // Mobile platforms
+        return Image.file(
+          File(imagePath),
+          width: 100,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade300,
+              child: Icon(
+                Icons.broken_image,
+                size: 32,
+                color: Colors.grey.shade600,
+              ),
+            );
+          },
+        );
+      }
+    }
+  }
+
   void _addImage() async {
+    // If editing an existing property, upload immediately
+    if (widget.isEdit && widget.propertyId != null) {
+      await _uploadImageForExistingProperty();
+    } else {
+      // If creating new property, just select and store locally
+      await _selectImageForNewProperty();
+    }
+  }
+
+  Future<void> _uploadImageForExistingProperty() async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -540,15 +626,62 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
       );
 
       if (image != null) {
-        // For now, we'll just add a placeholder URL
-        // In a real app, you would upload the image to a server
+        setState(() => _isLoading = true);
+
+        // Upload the image
+        final photoData = await _photoService.uploadPropertyPhoto(
+          propertyId: widget.propertyId!,
+          imagePath: image.path,
+        );
+
+        if (photoData != null && mounted) {
+          setState(() {
+            _uploadedPhotos.add(photoData);
+            _imageUrls.add(_photoService.getPhotoUrl(photoData['url']));
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Photo uploaded successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _selectImageForNewProperty() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
         setState(() {
-          _imageUrls.add('placeholder_${_imageUrls.length}');
+          _imageUrls.add(image.path); // Store local path for new properties
         });
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Image selected (upload functionality would be implemented here)'),
+            content: Text('Photo selected. It will be uploaded when you save the property.'),
           ),
         );
       }
@@ -559,10 +692,51 @@ class _AddEditPropertyScreenState extends State<AddEditPropertyScreen> {
     }
   }
 
-  void _removeImage(int index) {
-    setState(() {
-      _imageUrls.removeAt(index);
-    });
+  void _removeImage(int index) async {
+    // If it's an uploaded photo (has ID), delete from server
+    if (widget.isEdit && index < _uploadedPhotos.length) {
+      final photo = _uploadedPhotos[index];
+      try {
+        setState(() => _isLoading = true);
+        
+        await _photoService.deletePropertyPhoto(
+          propertyId: widget.propertyId!,
+          photoId: photo['id'],
+        );
+        
+        setState(() {
+          _uploadedPhotos.removeAt(index);
+          _imageUrls.removeAt(index);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Photo deleted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting photo: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } else {
+      // Just remove from local list for new properties
+      setState(() {
+        _imageUrls.removeAt(index);
+      });
+    }
   }
 
   void _saveProperty() async {
