@@ -1,0 +1,29 @@
+{
+  "name": "home-skillet-database",
+  "version": "1.0.0",
+  "description": "Database schema and migrations for Home Skillet application",
+  "main": "knexfile.js",
+  "scripts": {
+    "migrate:latest": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback",
+    "migrate:make": "knex migrate:make",
+    "seed:run": "knex seed:run",
+    "seed:make": "knex seed:make",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "db:setup": "npm run migrate:latest && npm run seed:run"
+  },
+  "dependencies": {
+    "knex": "^3.1.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "dotenv": "^16.4.5"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"]
+  }
+}

@@ -1,0 +1,82 @@
+name: home_skillet_mobile
+description: A Flutter application for home maintenance project management
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP Client & Networking  
+  http: ^1.1.0
+  dio: ^5.3.2
+
+  # State Management
+  provider: ^6.0.5
+  retrofit: ^4.0.3
+  json_annotation: ^4.9.0
+
+  # Secure Storage
+  flutter_secure_storage: ^9.0.0
+
+  # Navigation
+  go_router: ^12.1.1
+
+  # UI Components
+  cupertino_icons: ^1.0.2
+  flutter_svg: ^2.0.9
+
+  # Supabase Integration
+  supabase_flutter: ^2.5.6
+
+  # Utilities
+  equatable: ^2.0.5
+  uuid: ^4.1.0
+  intl: ^0.18.1
+
+  # Form Validation
+  formz: ^0.6.1
+
+  # Loading Indicators
+  flutter_spinkit: ^5.2.0
+
+  # Image Handling
+  cached_network_image: ^3.3.0
+  image_picker: ^1.0.4
+
+  # Device Info
+  device_info_plus: ^9.1.0
+  package_info_plus: ^4.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code Generation
+  build_runner: ^2.4.7
+  retrofit_generator: ^8.0.4
+  json_serializable: ^6.8.0
+
+  # Testing
+  mockito: ^5.4.2
+  bloc_test: ^9.1.5
+  integration_test:
+    sdk: flutter
+
+  # Linting
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  # Assets will be added as needed
+  # assets:
+  #   - assets/images/
+
+  # Using default system fonts for now
