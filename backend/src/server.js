@@ -9,6 +9,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Health check: http://localhost:${PORT}/health`);
   console.log(`📚 API base URL: http://localhost:${PORT}/api/${process.env.API_VERSION || 'v1'}`);
   console.log(`🔗 Railway health check ready at: /health`);
+  console.log(`🗄️  Database URL configured: ${process.env.SUPABASE_DB_URL ? 'Yes' : 'No'}`);
+  console.log(`🪣 Supabase URL configured: ${process.env.SUPABASE_URL ? 'Yes' : 'No'}`);
   
   // Initialize Supabase Storage buckets AFTER server is ready (non-blocking)
   if (process.env.NODE_ENV !== 'test') {
@@ -21,7 +23,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
         console.warn('⚠️  Storage initialization failed, continuing without buckets:', error.message);
         // App continues to work, storage buckets can be created manually if needed
       }
-    }, 1000); // Delay to ensure server is fully ready
+    }, 2000); // Increased delay for Railway
   }
 });
 
@@ -36,6 +38,24 @@ server.on('error', (err) => {
 // Log when server is ready for connections
 server.on('listening', () => {
   console.log(`✅ Server is ready to accept connections on port ${PORT}`);
+});
+
+// Global error handlers for Railway debugging
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  // Don't exit immediately in production to allow health checks
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit immediately in production to allow health checks
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
 });
 
 // Graceful shutdown handling

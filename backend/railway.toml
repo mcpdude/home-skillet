@@ -4,8 +4,10 @@ builder = "nixpacks"
 [deploy]
 healthcheckPath = "/health"
 healthcheckTimeout = 300
+healthcheckInterval = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+startCommand = "npm start"
 
 [[deploy.envVars]]
 name = "NODE_ENV"

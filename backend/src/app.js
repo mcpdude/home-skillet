@@ -66,20 +66,26 @@ if (process.env.NODE_ENV === 'development') {
   app.use(requestLogger);
 }
 
-// Health check endpoints
+// Health check endpoints - minimal, no database dependency
 app.get('/health', (req, res) => {
   console.log('🩺 Health check requested');
-  res.status(200).json({
-    success: true,
-    data: {
-      message: 'Home Skillet API is running',
+  try {
+    res.status(200).json({
+      success: true,
+      status: 'healthy',
       timestamp: new Date().toISOString(),
-      version: process.env.API_VERSION || 'v1',
-      environment: process.env.NODE_ENV || 'development',
       uptime: process.uptime(),
-      port: process.env.PORT
-    }
-  });
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.API_VERSION || 'v1'
+    });
+  } catch (error) {
+    console.error('❌ Health check error:', error);
+    res.status(500).json({
+      success: false,
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
 });
 
 // Root endpoint for Railway health checks
@@ -90,9 +96,68 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
+      'health-db': '/health/db',
       api: `/api/${process.env.API_VERSION || 'v1'}`
     }
   });
+});
+
+// Database health check endpoint
+app.get('/health/db', async (req, res) => {
+  console.log('🩺 Database health check requested');
+  try {
+    // Test database connection
+    const db = require('./config/database');
+    await db.raw('SELECT 1');
+    
+    res.status(200).json({
+      success: true,
+      status: 'healthy',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Database health check failed:', error);
+    res.status(503).json({
+      success: false,
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Simple database connection test endpoint 
+app.get('/health/db-simple', async (req, res) => {
+  console.log('🩺 Simple database connection test');
+  try {
+    // Test connection using pg directly (bypassing Knex)
+    const { Client } = require('pg');
+    const client = new Client({
+      connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    });
+    
+    await client.connect();
+    const result = await client.query('SELECT NOW()');
+    await client.end();
+    
+    res.status(200).json({
+      success: true,
+      status: 'connected',
+      timestamp: new Date().toISOString(),
+      db_time: result.rows[0].now
+    });
+  } catch (error) {
+    console.error('❌ Simple database test failed:', error);
+    res.status(503).json({
+      success: false,
+      status: 'failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // API routes
