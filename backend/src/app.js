@@ -71,6 +71,59 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// Database connectivity test endpoint
+app.get('/health/db-test', async (req, res) => {
+  try {
+    const { Client } = require('pg');
+    const client = new Client({
+      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+      port: 5432,
+      database: 'postgres',
+      user: 'postgres',
+      password: 'lk5FPenvv8yk4nqY',
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    await client.connect();
+    const result = await client.query('SELECT NOW() as current_time, version() as pg_version');
+    await client.end();
+    
+    res.json({
+      status: 'connected',
+      timestamp: Date.now(),
+      database: {
+        current_time: result.rows[0].current_time,
+        version: result.rows[0].pg_version
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'failed',
+      error: error.message,
+      timestamp: Date.now()
+    });
+  }
+});
+
+// Migration endpoint for Railway deployment
+app.post('/migrate', async (req, res) => {
+  try {
+    const { runMigrations } = require('../railway-migrate');
+    await runMigrations();
+    res.json({
+      status: 'success',
+      message: 'Database migrations completed successfully',
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'failed',
+      error: error.message,
+      timestamp: Date.now()
+    });
+  }
+});
+
 // Root endpoint for Railway health checks
 app.get('/', (req, res) => {
   res.status(200).json({
