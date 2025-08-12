@@ -21,56 +21,29 @@ if (!hasDbConfig) {
 // Run database migrations if in production
 if (process.env.NODE_ENV === 'production') {
   console.log('🔄 Running database migrations...');
-  console.log(`🔗 Using database URL: ${process.env.SUPABASE_DB_URL?.substring(0, 50)}...`);
+  console.log('🔗 Connecting to Supabase database...');
   
-  // Test database connection before running migrations
-  (async () => {
-    try {
-      const { Client } = require('pg');
-      const client = new Client({
-        connectionString: process.env.SUPABASE_DB_URL,
-        ssl: { rejectUnauthorized: false },
-        // Force IPv4 to avoid Railway IPv6 issues
-        host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
-        port: 5432,
-        database: 'postgres',
-        user: 'postgres',
-        password: 'lk5FPenvv8yk4nqY'
-      });
-      
-      console.log('🔍 Testing database connection...');
-      await client.connect();
-      await client.query('SELECT 1');
-      await client.end();
-      console.log('✅ Database connection successful');
-      
-      // Run migrations after successful connection test
-      const migrate = spawn('npx', ['knex', 'migrate:latest', '--env', 'production'], {
-        stdio: 'inherit',
-        env: process.env,
-        cwd: __dirname
-      });
+  // Run migrations directly without pre-testing connection
+  const migrate = spawn('npx', ['knex', 'migrate:latest', '--env', 'production'], {
+    stdio: 'inherit',
+    env: process.env,
+    cwd: __dirname
+  });
 
-      migrate.on('error', (error) => {
-        console.error('❌ Migration process error:', error);
-        process.exit(1);
-      });
+  migrate.on('error', (error) => {
+    console.error('❌ Migration process error:', error);
+    process.exit(1);
+  });
 
-      migrate.on('close', (code) => {
-        if (code === 0) {
-          console.log('✅ Database migrations completed successfully');
-          startServer();
-        } else {
-          console.error(`❌ Migration process exited with code ${code}`);
-          process.exit(1);
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ Database connection test failed:', error.message);
+  migrate.on('close', (code) => {
+    if (code === 0) {
+      console.log('✅ Database migrations completed successfully');
+      startServer();
+    } else {
+      console.error(`❌ Migration process exited with code ${code}`);
       process.exit(1);
     }
-  })();
+  });
 } else {
   // Development mode - start server directly
   startServer();

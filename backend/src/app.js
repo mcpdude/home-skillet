@@ -132,11 +132,15 @@ app.get('/health/db', async (req, res) => {
 app.get('/health/db-simple', async (req, res) => {
   console.log('🩺 Simple database connection test');
   try {
-    // Test connection using pg directly (bypassing Knex)
+    // Test connection using pg directly (bypassing Knex) with IPv4
     const { Client } = require('pg');
     const client = new Client({
-      connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+      port: 5432,
+      database: 'postgres',
+      user: 'postgres',
+      password: 'lk5FPenvv8yk4nqY',
+      ssl: { rejectUnauthorized: false }
     });
     
     await client.connect();
