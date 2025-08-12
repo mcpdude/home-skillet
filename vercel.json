@@ -1,9 +1,9 @@
 {
   "name": "home-skillet-frontend",
   "framework": null,
-  "buildCommand": "cd mobile && flutter build web",
-  "outputDirectory": "mobile/build/web",
-  "installCommand": "curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.16.0-stable.tar.xz | tar xJ && export PATH=\"$PATH:$PWD/flutter/bin\" && flutter doctor && cd mobile && flutter pub get",
+  "buildCommand": "echo 'Using pre-built Flutter web files'",
+  "outputDirectory": "web-deploy",
+  "installCommand": "echo 'No install needed'",
   "rewrites": [
     {
       "source": "/(.*)",
