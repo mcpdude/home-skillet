@@ -12,6 +12,26 @@ const { generateToken, authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Test endpoint to check database connectivity
+router.get('/test-db', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    const result = await db('users').count('id as count').first();
+    console.log('Database test result:', result);
+    return res.json({
+      success: true,
+      message: 'Database connected',
+      userCount: result.count
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 /**
  * POST /api/v1/auth/register
  * Register a new user
@@ -87,21 +107,29 @@ router.post('/register', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
   try {
+    console.log('Login attempt:', { email: req.body.email, hasPassword: !!req.body.password });
+    
     // Validate request body
     const { error, value } = userSchemas.login.validate(req.body);
     if (error) {
+      console.log('Validation error:', error.details);
       const validationError = formatValidationError(error);
       const { error: errorObj, statusCode } = createErrorResponse(validationError.message, 400, validationError.details);
       return res.status(statusCode).json(createResponse(false, null, errorObj));
     }
 
     const { email, password } = value;
+    console.log('Validated input:', { email, hasPassword: !!password });
 
     // Find user by email
+    console.log('Querying database for user:', email);
     const dbUser = await db('users')
       .where(db.raw('LOWER(email) = LOWER(?)', [email]))
       .first();
+    console.log('Database query result:', { found: !!dbUser, userId: dbUser?.id });
+    
     if (!dbUser) {
+      console.log('User not found in database');
       const { error: errorObj, statusCode } = createErrorResponse('Invalid credentials', 401);
       return res.status(statusCode).json(createResponse(false, null, errorObj));
     }
@@ -143,7 +171,9 @@ router.post('/login', async (req, res) => {
     return res.status(200).json(createResponse(true, responseData));
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error - Full details:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
     const { error: errorObj, statusCode } = createErrorResponse('Internal server error', 500);
     return res.status(statusCode).json(createResponse(false, null, errorObj));
   }
