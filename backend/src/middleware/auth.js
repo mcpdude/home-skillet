@@ -196,7 +196,7 @@ const validatePropertyAccess = async (req, res, next) => {
     squareFeet: dbProperty.square_feet,
     lotSize: dbProperty.lot_size,
     yearBuilt: dbProperty.year_built,
-    ownerId: dbProperty.owner_id,
+    ownerId: dbProperty.user_id,
     createdAt: dbProperty.created_at,
     updatedAt: dbProperty.updated_at
   };
@@ -438,7 +438,7 @@ const validateProjectAccess = async (req, res, next) => {
     squareFeet: dbProperty.square_feet,
     lotSize: dbProperty.lot_size,
     yearBuilt: dbProperty.year_built,
-    ownerId: dbProperty.owner_id,
+    ownerId: dbProperty.user_id,
     createdAt: dbProperty.created_at,
     updatedAt: dbProperty.updated_at
   };
@@ -662,7 +662,7 @@ const validateMaintenanceAccess = async (req, res, next) => {
     squareFeet: dbProperty.square_feet,
     lotSize: dbProperty.lot_size,
     yearBuilt: dbProperty.year_built,
-    ownerId: dbProperty.owner_id,
+    ownerId: dbProperty.user_id,
     createdAt: dbProperty.created_at,
     updatedAt: dbProperty.updated_at
   };

@@ -59,7 +59,7 @@ router.post('/', authenticate, async (req, res) => {
             square_feet: value.squareFeet,
             lot_size: value.lotSize,
             year_built: value.yearBuilt,
-            owner_id: req.user.id
+            user_id: req.user.id
           })
           .select()
           .single();
@@ -91,9 +91,9 @@ router.post('/', authenticate, async (req, res) => {
             square_feet: value.squareFeet,
             lot_size: value.lotSize,
             year_built: value.yearBuilt,
-            owner_id: req.user.id
+            user_id: req.user.id
           })
-          .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'owner_id', 'created_at', 'updated_at']);
+          .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'user_id', 'created_at', 'updated_at']);
         dbProperty = directDbProperty;
       } catch (dbError) {
         console.error('Direct DB property creation failed (likely connection pool timeout):', dbError.message);
@@ -114,7 +114,7 @@ router.post('/', authenticate, async (req, res) => {
       squareFeet: dbProperty.square_feet,
       lotSize: dbProperty.lot_size,
       yearBuilt: dbProperty.year_built,
-      ownerId: dbProperty.owner_id,
+      ownerId: dbProperty.user_id,
       createdAt: dbProperty.created_at,
       updatedAt: dbProperty.updated_at
     };
@@ -154,29 +154,29 @@ router.get('/', authenticate, async (req, res) => {
         let supabaseOwnedProperties = null;
         let ownedError = null;
         
-        // Try owner_id first (snake_case)
-        const { data: ownedPropsSnake, error: errorSnake } = await supabase
+        // Try user_id (correct column name based on error logs)
+        const { data: ownedPropsUserId, error: errorUserId } = await supabase
           .from('properties')
           .select('*')
-          .eq('owner_id', req.user.id);
+          .eq('user_id', req.user.id);
         
-        if (!errorSnake) {
-          supabaseOwnedProperties = ownedPropsSnake;
+        if (!errorUserId) {
+          supabaseOwnedProperties = ownedPropsUserId;
         } else {
-          // If that fails, try ownerId (camelCase) as fallback
-          console.log('Trying camelCase column name...');
-          const { data: ownedPropsCamel, error: errorCamel } = await supabase
+          // If that fails, try owner_id as fallback
+          console.log('Trying owner_id column name...');
+          const { data: ownedPropsOwnerId, error: errorOwnerId } = await supabase
             .from('properties')
             .select('*')
-            .eq('ownerId', req.user.id);
+            .eq('owner_id', req.user.id);
           
-          if (!errorCamel) {
-            supabaseOwnedProperties = ownedPropsCamel;
+          if (!errorOwnerId) {
+            supabaseOwnedProperties = ownedPropsOwnerId;
           } else {
-            ownedError = errorSnake; // Use the original error
-            console.log('Both column name attempts failed:', {
-              snakeError: errorSnake.message,
-              camelError: errorCamel.message
+            ownedError = errorUserId; // Use the original error
+            console.log('Both user_id and owner_id attempts failed:', {
+              userIdError: errorUserId.message,
+              ownerIdError: errorOwnerId.message
             });
           }
         }
@@ -229,7 +229,7 @@ router.get('/', authenticate, async (req, res) => {
       console.log('Falling back to direct DB queries...');
       try {
         ownedProperties = await db('properties')
-          .where('owner_id', req.user.id);
+          .where('user_id', req.user.id);
         
         accessiblePropertiesIds = await db('property_permissions')
           .where('user_id', req.user.id)
@@ -263,7 +263,7 @@ router.get('/', authenticate, async (req, res) => {
       squareFeet: dbProperty.square_feet,
       lotSize: dbProperty.lot_size,
       yearBuilt: dbProperty.year_built,
-      ownerId: dbProperty.owner_id,
+      ownerId: dbProperty.user_id,
       createdAt: dbProperty.created_at,
       updatedAt: dbProperty.updated_at
     }));
@@ -370,7 +370,7 @@ router.put('/:id', authenticate, validatePropertyAccess, async (req, res) => {
       squareFeet: dbProperty.square_feet,
       lotSize: dbProperty.lot_size,
       yearBuilt: dbProperty.year_built,
-      ownerId: dbProperty.owner_id,
+      ownerId: dbProperty.user_id,
       createdAt: dbProperty.created_at,
       updatedAt: dbProperty.updated_at
     };

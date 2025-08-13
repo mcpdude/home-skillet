@@ -64,7 +64,7 @@ router.post('/', authenticate, async (req, res) => {
           dbProperty = supabaseProperty;
           
           // Check if user owns the property
-          if (dbProperty.owner_id === req.user.id) {
+          if (dbProperty.user_id === req.user.id) {
             hasAccess = true;
           } else {
             // Check property permissions
@@ -95,7 +95,7 @@ router.post('/', authenticate, async (req, res) => {
       try {
         dbProperty = await db('properties').where('id', propertyId).first();
         if (dbProperty) {
-          hasAccess = dbProperty.owner_id === req.user.id || 
+          hasAccess = dbProperty.user_id === req.user.id || 
             await db('property_permissions')
               .where({ user_id: req.user.id, property_id: propertyId })
               .first() !== undefined;
@@ -271,7 +271,7 @@ router.get('/', authenticate, async (req, res) => {
         const { data: userProperties, error: propertiesError } = await supabase
           .from('properties')
           .select('id')
-          .eq('owner_id', req.user.id);
+          .eq('user_id', req.user.id);
 
         if (propertiesError) {
           console.log('Supabase properties query failed, falling back to direct DB:', propertiesError.message);
@@ -361,7 +361,7 @@ router.get('/', authenticate, async (req, res) => {
       try {
         const ownedProjectsQuery = db('projects')
           .join('properties', 'projects.property_id', 'properties.id')
-          .where('properties.owner_id', req.user.id)
+          .where('properties.user_id', req.user.id)
           .select('projects.*');
         
         const accessibleProjectsQuery = db('projects')
