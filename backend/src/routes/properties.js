@@ -79,21 +79,27 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     if (useDirectDB) {
-      const [directDbProperty] = await db('properties')
-        .insert({
-          name: value.name,
-          description: value.description,
-          address: value.address,
-          type: value.type,
-          bedrooms: value.bedrooms,
-          bathrooms: value.bathrooms,
-          square_feet: value.squareFeet,
-          lot_size: value.lotSize,
-          year_built: value.yearBuilt,
-          owner_id: req.user.id
-        })
-        .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'owner_id', 'created_at', 'updated_at']);
-      dbProperty = directDbProperty;
+      try {
+        const [directDbProperty] = await db('properties')
+          .insert({
+            name: value.name,
+            description: value.description,
+            address: value.address,
+            type: value.type,
+            bedrooms: value.bedrooms,
+            bathrooms: value.bathrooms,
+            square_feet: value.squareFeet,
+            lot_size: value.lotSize,
+            year_built: value.yearBuilt,
+            owner_id: req.user.id
+          })
+          .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'owner_id', 'created_at', 'updated_at']);
+        dbProperty = directDbProperty;
+      } catch (dbError) {
+        console.error('Direct DB property creation failed (likely connection pool timeout):', dbError.message);
+        const { error: errorObj, statusCode } = createErrorResponse('Unable to create property due to database connectivity issues. Please try again later.', 503);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
+      }
     }
     
     // Transform to expected format
@@ -143,17 +149,50 @@ router.get('/', authenticate, async (req, res) => {
 
     if (supabase) {
       try {
-        // Get owned properties from Supabase
-        const { data: supabaseOwnedProperties, error: ownedError } = await supabase
+        // Get owned properties from Supabase - try different column name variations
+        console.log('Attempting Supabase properties query for user:', req.user.id);
+        let supabaseOwnedProperties = null;
+        let ownedError = null;
+        
+        // Try owner_id first (snake_case)
+        const { data: ownedPropsSnake, error: errorSnake } = await supabase
           .from('properties')
           .select('*')
           .eq('owner_id', req.user.id);
+        
+        if (!errorSnake) {
+          supabaseOwnedProperties = ownedPropsSnake;
+        } else {
+          // If that fails, try ownerId (camelCase) as fallback
+          console.log('Trying camelCase column name...');
+          const { data: ownedPropsCamel, error: errorCamel } = await supabase
+            .from('properties')
+            .select('*')
+            .eq('ownerId', req.user.id);
+          
+          if (!errorCamel) {
+            supabaseOwnedProperties = ownedPropsCamel;
+          } else {
+            ownedError = errorSnake; // Use the original error
+            console.log('Both column name attempts failed:', {
+              snakeError: errorSnake.message,
+              camelError: errorCamel.message
+            });
+          }
+        }
         
         // Get property permissions from Supabase  
         const { data: supabasePermissions, error: permissionsError } = await supabase
           .from('property_permissions')
           .select('property_id')
           .eq('user_id', req.user.id);
+
+        console.log('Supabase query results:', {
+          ownedError: ownedError?.message,
+          permissionsError: permissionsError?.message,
+          ownedCount: supabaseOwnedProperties?.length || 0,
+          permissionsCount: supabasePermissions?.length || 0
+        });
 
         if (ownedError || permissionsError) {
           console.log('Supabase properties query failed, falling back to direct DB:', ownedError?.message || permissionsError?.message);
@@ -186,16 +225,29 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     if (useDirectDB) {
-      ownedProperties = await db('properties')
-        .where('owner_id', req.user.id);
-      
-      accessiblePropertiesIds = await db('property_permissions')
-        .where('user_id', req.user.id)
-        .pluck('property_id');
-      
-      accessibleProperties = accessiblePropertiesIds.length > 0 
-        ? await db('properties').whereIn('id', accessiblePropertiesIds)
-        : [];
+      // Check if we're likely in a connection pool timeout scenario
+      console.log('Falling back to direct DB queries...');
+      try {
+        ownedProperties = await db('properties')
+          .where('owner_id', req.user.id);
+        
+        accessiblePropertiesIds = await db('property_permissions')
+          .where('user_id', req.user.id)
+          .pluck('property_id');
+        
+        accessibleProperties = accessiblePropertiesIds.length > 0 
+          ? await db('properties').whereIn('id', accessiblePropertiesIds)
+          : [];
+      } catch (dbError) {
+        console.error('Direct DB query failed (likely connection pool timeout):', dbError.message);
+        // Return empty arrays to prevent complete failure
+        ownedProperties = [];
+        accessibleProperties = [];
+        accessiblePropertiesIds = [];
+        
+        // Don't throw the error, just log it and continue with empty results
+        console.log('Returning empty results due to connection pool timeout');
+      }
     }
     
     // Combine and transform properties

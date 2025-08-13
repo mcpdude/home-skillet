@@ -92,12 +92,18 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     if (useDirectDB) {
-      dbProperty = await db('properties').where('id', propertyId).first();
-      if (dbProperty) {
-        hasAccess = dbProperty.owner_id === req.user.id || 
-          await db('property_permissions')
-            .where({ user_id: req.user.id, property_id: propertyId })
-            .first() !== undefined;
+      try {
+        dbProperty = await db('properties').where('id', propertyId).first();
+        if (dbProperty) {
+          hasAccess = dbProperty.owner_id === req.user.id || 
+            await db('property_permissions')
+              .where({ user_id: req.user.id, property_id: propertyId })
+              .first() !== undefined;
+        }
+      } catch (dbError) {
+        console.error('Direct DB property access check failed (likely connection pool timeout):', dbError.message);
+        const { error: errorObj, statusCode } = createErrorResponse('Unable to verify property access due to database connectivity issues. Please try again later.', 503);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
       }
     }
 
@@ -150,22 +156,28 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     if (useDirectDB) {
-      const [directDbProject] = await db('projects')
-        .insert({
-          property_id: propertyId,
-          title: projectData.title,
-          description: projectData.description,
-          status: projectData.status || 'pending',
-          priority: projectData.priority || 'medium',
-          budget: projectData.budget,
-          actual_cost: projectData.actualCost,
-          start_date: projectData.startDate,
-          end_date: projectData.endDate,
-          due_date: projectData.dueDate,
-          created_by: req.user.id
-        })
-        .returning(['id', 'property_id', 'title', 'description', 'status', 'priority', 'budget', 'actual_cost', 'start_date', 'end_date', 'due_date', 'created_by', 'created_at', 'updated_at']);
-      dbProject = directDbProject;
+      try {
+        const [directDbProject] = await db('projects')
+          .insert({
+            property_id: propertyId,
+            title: projectData.title,
+            description: projectData.description,
+            status: projectData.status || 'pending',
+            priority: projectData.priority || 'medium',
+            budget: projectData.budget,
+            actual_cost: projectData.actualCost,
+            start_date: projectData.startDate,
+            end_date: projectData.endDate,
+            due_date: projectData.dueDate,
+            created_by: req.user.id
+          })
+          .returning(['id', 'property_id', 'title', 'description', 'status', 'priority', 'budget', 'actual_cost', 'start_date', 'end_date', 'due_date', 'created_by', 'created_at', 'updated_at']);
+        dbProject = directDbProject;
+      } catch (dbError) {
+        console.error('Direct DB project creation failed (likely connection pool timeout):', dbError.message);
+        const { error: errorObj, statusCode } = createErrorResponse('Unable to create project due to database connectivity issues. Please try again later.', 503);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
+      }
     }
     
     // Process and insert tasks if provided
@@ -345,30 +357,42 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     if (useDirectDB) {
-      const ownedProjectsQuery = db('projects')
-        .join('properties', 'projects.property_id', 'properties.id')
-        .where('properties.owner_id', req.user.id)
-        .select('projects.*');
-      
-      const accessibleProjectsQuery = db('projects')
-        .join('property_permissions', 'projects.property_id', 'property_permissions.property_id')
-        .where('property_permissions.user_id', req.user.id)
-        .select('projects.*');
-      
-      const assignedProjectsQuery = db('projects')
-        .join('project_assignments', 'projects.id', 'project_assignments.project_id')
-        .where('project_assignments.user_id', req.user.id)
-        .select('projects.*');
-      
-      const [directOwnedProjects, directAccessibleProjects, directAssignedProjects] = await Promise.all([
-        ownedProjectsQuery,
-        accessibleProjectsQuery,
-        assignedProjectsQuery
-      ]);
-      
-      ownedProjects = directOwnedProjects;
-      accessibleProjects = directAccessibleProjects;
-      assignedProjects = directAssignedProjects;
+      console.log('Falling back to direct DB queries for projects...');
+      try {
+        const ownedProjectsQuery = db('projects')
+          .join('properties', 'projects.property_id', 'properties.id')
+          .where('properties.owner_id', req.user.id)
+          .select('projects.*');
+        
+        const accessibleProjectsQuery = db('projects')
+          .join('property_permissions', 'projects.property_id', 'property_permissions.property_id')
+          .where('property_permissions.user_id', req.user.id)
+          .select('projects.*');
+        
+        const assignedProjectsQuery = db('projects')
+          .join('project_assignments', 'projects.id', 'project_assignments.project_id')
+          .where('project_assignments.user_id', req.user.id)
+          .select('projects.*');
+        
+        const [directOwnedProjects, directAccessibleProjects, directAssignedProjects] = await Promise.all([
+          ownedProjectsQuery,
+          accessibleProjectsQuery,
+          assignedProjectsQuery
+        ]);
+        
+        ownedProjects = directOwnedProjects;
+        accessibleProjects = directAccessibleProjects;
+        assignedProjects = directAssignedProjects;
+      } catch (dbError) {
+        console.error('Direct DB projects query failed (likely connection pool timeout):', dbError.message);
+        // Return empty arrays to prevent complete failure
+        ownedProjects = [];
+        accessibleProjects = [];
+        assignedProjects = [];
+        
+        // Don't throw the error, just log it and continue with empty results
+        console.log('Returning empty projects due to connection pool timeout');
+      }
     }
     
     // Combine and deduplicate projects
