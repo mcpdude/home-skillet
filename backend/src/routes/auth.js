@@ -78,10 +78,49 @@ router.post('/register', async (req, res) => {
 
     const { email, password, firstName, lastName, userType } = value;
 
-    // Check if user already exists
-    const existingUser = await db('users')
-      .where(db.raw('LOWER(email) = LOWER(?)', [email]))
-      .first();
+    // Check if user already exists - try Supabase first, fallback to direct DB
+    let existingUser = null;
+    let useDirectDB = false;
+    
+    if (supabase) {
+      try {
+        console.log('Checking existing user with Supabase:', email);
+        const { data: users, error: supabaseError } = await supabase
+          .from('users')
+          .select('id, email')
+          .ilike('email', email)
+          .limit(1);
+        
+        if (supabaseError) {
+          console.error('Supabase user check error:', supabaseError);
+          console.log('Falling back to direct database connection...');
+          useDirectDB = true;
+        } else if (users && users.length > 0) {
+          existingUser = users[0];
+        }
+      } catch (error) {
+        console.error('Supabase client error:', error);
+        console.log('Falling back to direct database connection...');
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+    
+    // Fallback to direct database connection if needed
+    if (!existingUser && useDirectDB) {
+      console.log('Using direct database connection to check existing user:', email);
+      try {
+        existingUser = await db('users')
+          .where(db.raw('LOWER(email) = LOWER(?)', [email]))
+          .first();
+      } catch (dbError) {
+        console.error('Direct database query failed:', dbError);
+        const { error: errorObj, statusCode } = createErrorResponse('Database error', 500);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
+      }
+    }
+    
     if (existingUser) {
       const { error: errorObj, statusCode } = createErrorResponse('User with this email already exists', 409);
       return res.status(statusCode).json(createResponse(false, null, errorObj));
@@ -91,16 +130,56 @@ router.post('/register', async (req, res) => {
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create new user
-    const [newUser] = await db('users')
-      .insert({
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        first_name: firstName,
-        last_name: lastName,
-        user_type: userType
-      })
-      .returning(['id', 'email', 'first_name', 'last_name', 'user_type', 'created_at', 'updated_at']);
+    // Create new user - try Supabase first, fallback to direct DB
+    let newUser = null;
+    
+    if (supabase) {
+      try {
+        console.log('Creating user with Supabase:', email);
+        const { data, error: supabaseError } = await supabase
+          .from('users')
+          .insert({
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            first_name: firstName,
+            last_name: lastName,
+            user_type: userType
+          })
+          .select('id, email, first_name, last_name, user_type, created_at, updated_at')
+          .single();
+        
+        if (supabaseError) {
+          console.error('Supabase user creation error:', supabaseError);
+          console.log('Falling back to direct database connection...');
+        } else {
+          newUser = data;
+        }
+      } catch (error) {
+        console.error('Supabase client error during user creation:', error);
+        console.log('Falling back to direct database connection...');
+      }
+    }
+    
+    // Fallback to direct database connection if Supabase failed
+    if (!newUser) {
+      console.log('Using direct database connection to create user:', email);
+      try {
+        const [createdUser] = await db('users')
+          .insert({
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            first_name: firstName,
+            last_name: lastName,
+            user_type: userType
+          })
+          .returning(['id', 'email', 'first_name', 'last_name', 'user_type', 'created_at', 'updated_at']);
+        newUser = createdUser;
+      } catch (dbError) {
+        console.error('Direct database user creation failed:', dbError);
+        const { error: errorObj, statusCode } = createErrorResponse('Database error', 500);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
+      }
+    }
     
     // Transform to match expected format
     const userForToken = {
