@@ -423,6 +423,251 @@ router.put('/me', authenticate, async (req, res) => {
 });
 
 /**
+ * POST /api/v1/auth/forgot-password
+ * Request password reset (generates reset token)
+ */
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { error, value } = userSchemas.forgotPassword?.validate?.(req.body) || { value: req.body };
+    if (error) {
+      const validationError = formatValidationError(error);
+      const { error: errorObj, statusCode } = createErrorResponse(validationError.message, 400, validationError.details);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+
+    const { email } = value;
+    console.log('Password reset requested for:', email);
+
+    // Find user - try Supabase first, fallback to direct DB
+    let user = null;
+    let useDirectDB = false;
+    
+    if (supabase) {
+      try {
+        const { data: users, error: supabaseError } = await supabase
+          .from('users')
+          .select('id, email, first_name')
+          .ilike('email', email)
+          .limit(1);
+        
+        if (supabaseError) {
+          console.error('Supabase user lookup error:', supabaseError);
+          useDirectDB = true;
+        } else if (users && users.length > 0) {
+          user = users[0];
+        }
+      } catch (error) {
+        console.error('Supabase client error:', error);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+    
+    if (!user && useDirectDB) {
+      try {
+        const dbUser = await db('users')
+          .where(db.raw('LOWER(email) = LOWER(?)', [email]))
+          .select('id', 'email', 'first_name')
+          .first();
+        if (dbUser) {
+          user = dbUser;
+        }
+      } catch (dbError) {
+        console.error('Direct database query failed:', dbError);
+        // Still return success for security - don't reveal if email exists
+      }
+    }
+
+    // Always return success for security (don't reveal if email exists)
+    const responseData = {
+      message: 'If an account with this email exists, a password reset link has been sent.'
+    };
+
+    // If user exists, generate reset token (in real app, send email here)
+    if (user) {
+      const resetToken = require('crypto').randomBytes(32).toString('hex');
+      const resetExpires = new Date(Date.now() + 3600000); // 1 hour from now
+
+      // Store reset token - try Supabase first, fallback to direct DB
+      try {
+        if (supabase) {
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              reset_password_token: resetToken,
+              reset_password_expires: resetExpires.toISOString()
+            })
+            .eq('id', user.id);
+          
+          if (updateError) {
+            console.error('Supabase reset token update failed:', updateError);
+            // Fallback to direct DB
+            await db('users')
+              .where('id', user.id)
+              .update({
+                reset_password_token: resetToken,
+                reset_password_expires: resetExpires
+              });
+          }
+        } else {
+          await db('users')
+            .where('id', user.id)
+            .update({
+              reset_password_token: resetToken,
+              reset_password_expires: resetExpires
+            });
+        }
+
+        console.log(`Password reset token generated for user ${user.id}`);
+        // In production: Send email with reset link containing the token
+        // For development: Log the reset token (remove this in production!)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🔑 Password reset token for ${email}: ${resetToken}`);
+        }
+      } catch (updateError) {
+        console.error('Failed to store reset token:', updateError);
+      }
+    }
+
+    return res.status(200).json(createResponse(true, responseData));
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    const { error: errorObj, statusCode } = createErrorResponse('Internal server error', 500);
+    return res.status(statusCode).json(createResponse(false, null, errorObj));
+  }
+});
+
+/**
+ * POST /api/v1/auth/reset-password
+ * Reset password using token
+ */
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { error, value } = userSchemas.resetPassword?.validate?.(req.body) || { value: req.body };
+    if (error) {
+      const validationError = formatValidationError(error);
+      const { error: errorObj, statusCode } = createErrorResponse(validationError.message, 400, validationError.details);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+
+    const { token, newPassword } = value;
+    console.log('Password reset attempt with token');
+
+    // Find user by reset token - try Supabase first, fallback to direct DB
+    let user = null;
+    let useDirectDB = false;
+    
+    if (supabase) {
+      try {
+        const { data: users, error: supabaseError } = await supabase
+          .from('users')
+          .select('id, email, reset_password_token, reset_password_expires')
+          .eq('reset_password_token', token)
+          .limit(1);
+        
+        if (supabaseError) {
+          console.error('Supabase token lookup error:', supabaseError);
+          useDirectDB = true;
+        } else if (users && users.length > 0) {
+          user = users[0];
+        }
+      } catch (error) {
+        console.error('Supabase client error:', error);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+    
+    if (!user && useDirectDB) {
+      try {
+        user = await db('users')
+          .where('reset_password_token', token)
+          .select('id', 'email', 'reset_password_token', 'reset_password_expires')
+          .first();
+      } catch (dbError) {
+        console.error('Direct database query failed:', dbError);
+        const { error: errorObj, statusCode } = createErrorResponse('Database error', 500);
+        return res.status(statusCode).json(createResponse(false, null, errorObj));
+      }
+    }
+
+    if (!user || !user.reset_password_token) {
+      const { error: errorObj, statusCode } = createErrorResponse('Invalid or expired reset token', 400);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+
+    // Check if token is expired
+    const tokenExpires = new Date(user.reset_password_expires);
+    if (tokenExpires < new Date()) {
+      const { error: errorObj, statusCode } = createErrorResponse('Reset token has expired', 400);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password and clear reset token - try Supabase first, fallback to direct DB
+    try {
+      if (supabase) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            password: hashedPassword,
+            reset_password_token: null,
+            reset_password_expires: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+        
+        if (updateError) {
+          console.error('Supabase password update failed:', updateError);
+          // Fallback to direct DB
+          await db('users')
+            .where('id', user.id)
+            .update({
+              password: hashedPassword,
+              reset_password_token: null,
+              reset_password_expires: null,
+              updated_at: new Date()
+            });
+        }
+      } else {
+        await db('users')
+          .where('id', user.id)
+          .update({
+            password: hashedPassword,
+            reset_password_token: null,
+            reset_password_expires: null,
+            updated_at: new Date()
+          });
+      }
+
+      console.log(`Password successfully reset for user ${user.id}`);
+      
+      const responseData = {
+        message: 'Password has been successfully reset'
+      };
+
+      return res.status(200).json(createResponse(true, responseData));
+
+    } catch (updateError) {
+      console.error('Failed to update password:', updateError);
+      const { error: errorObj, statusCode } = createErrorResponse('Failed to reset password', 500);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    const { error: errorObj, statusCode } = createErrorResponse('Internal server error', 500);
+    return res.status(statusCode).json(createResponse(false, null, errorObj));
+  }
+});
+
+/**
  * POST /api/v1/auth/logout
  * Logout user (client-side token removal)
  */
