@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/database');
+const { createClient } = require('@supabase/supabase-js');
 const { propertySchemas } = require('../utils/validation');
 const { 
   formatValidationError, 
@@ -12,6 +13,19 @@ const {
 const { authenticate, validatePropertyAccess } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Initialize Supabase client for direct API calls
+let supabase = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+} catch (error) {
+  console.error('Failed to initialize Supabase client in properties routes:', error);
+}
 
 /**
  * POST /api/v1/properties
@@ -27,21 +41,60 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(statusCode).json(createResponse(false, null, errorObj));
     }
 
-    // Create new property
-    const [dbProperty] = await db('properties')
-      .insert({
-        name: value.name,
-        description: value.description,
-        address: value.address,
-        type: value.type,
-        bedrooms: value.bedrooms,
-        bathrooms: value.bathrooms,
-        square_feet: value.squareFeet,
-        lot_size: value.lotSize,
-        year_built: value.yearBuilt,
-        owner_id: req.user.id
-      })
-      .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'owner_id', 'created_at', 'updated_at']);
+    // Create new property - try Supabase first, fallback to direct DB
+    let dbProperty = null;
+    let useDirectDB = false;
+
+    if (supabase) {
+      try {
+        const { data: supabaseProperty, error: insertError } = await supabase
+          .from('properties')
+          .insert({
+            name: value.name,
+            description: value.description,
+            address: value.address,
+            type: value.type,
+            bedrooms: value.bedrooms,
+            bathrooms: value.bathrooms,
+            square_feet: value.squareFeet,
+            lot_size: value.lotSize,
+            year_built: value.yearBuilt,
+            owner_id: req.user.id
+          })
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.log('Supabase property insert failed, falling back to direct DB:', insertError.message);
+          useDirectDB = true;
+        } else {
+          dbProperty = supabaseProperty;
+        }
+      } catch (error) {
+        console.log('Supabase property insert error, falling back to direct DB:', error.message);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+
+    if (useDirectDB) {
+      const [directDbProperty] = await db('properties')
+        .insert({
+          name: value.name,
+          description: value.description,
+          address: value.address,
+          type: value.type,
+          bedrooms: value.bedrooms,
+          bathrooms: value.bathrooms,
+          square_feet: value.squareFeet,
+          lot_size: value.lotSize,
+          year_built: value.yearBuilt,
+          owner_id: req.user.id
+        })
+        .returning(['id', 'name', 'description', 'address', 'type', 'bedrooms', 'bathrooms', 'square_feet', 'lot_size', 'year_built', 'owner_id', 'created_at', 'updated_at']);
+      dbProperty = directDbProperty;
+    }
     
     // Transform to expected format
     const newProperty = {
@@ -82,17 +135,68 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { page, limit, sortBy, sortOrder, ...filters } = req.query;
 
-    // Get user's properties (owned or has access to)
-    const ownedProperties = await db('properties')
-      .where('owner_id', req.user.id);
-    
-    const accessiblePropertiesIds = await db('property_permissions')
-      .where('user_id', req.user.id)
-      .pluck('property_id');
-    
-    const accessibleProperties = accessiblePropertiesIds.length > 0 
-      ? await db('properties').whereIn('id', accessiblePropertiesIds)
-      : [];
+    // Get user's properties (owned or has access to) - try Supabase first, fallback to direct DB
+    let ownedProperties = [];
+    let accessiblePropertiesIds = [];
+    let accessibleProperties = [];
+    let useDirectDB = false;
+
+    if (supabase) {
+      try {
+        // Get owned properties from Supabase
+        const { data: supabaseOwnedProperties, error: ownedError } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('owner_id', req.user.id);
+        
+        // Get property permissions from Supabase  
+        const { data: supabasePermissions, error: permissionsError } = await supabase
+          .from('property_permissions')
+          .select('property_id')
+          .eq('user_id', req.user.id);
+
+        if (ownedError || permissionsError) {
+          console.log('Supabase properties query failed, falling back to direct DB:', ownedError?.message || permissionsError?.message);
+          useDirectDB = true;
+        } else {
+          ownedProperties = supabaseOwnedProperties || [];
+          accessiblePropertiesIds = (supabasePermissions || []).map(p => p.property_id);
+          
+          // Get accessible properties if there are any
+          if (accessiblePropertiesIds.length > 0) {
+            const { data: supabaseAccessibleProperties, error: accessibleError } = await supabase
+              .from('properties')
+              .select('*')
+              .in('id', accessiblePropertiesIds);
+            
+            if (accessibleError) {
+              console.log('Supabase accessible properties query failed, falling back to direct DB:', accessibleError.message);
+              useDirectDB = true;
+            } else {
+              accessibleProperties = supabaseAccessibleProperties || [];
+            }
+          }
+        }
+      } catch (error) {
+        console.log('Supabase properties query error, falling back to direct DB:', error.message);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+
+    if (useDirectDB) {
+      ownedProperties = await db('properties')
+        .where('owner_id', req.user.id);
+      
+      accessiblePropertiesIds = await db('property_permissions')
+        .where('user_id', req.user.id)
+        .pluck('property_id');
+      
+      accessibleProperties = accessiblePropertiesIds.length > 0 
+        ? await db('properties').whereIn('id', accessiblePropertiesIds)
+        : [];
+    }
     
     // Combine and transform properties
     const allDbProperties = [...ownedProperties, ...accessibleProperties];
