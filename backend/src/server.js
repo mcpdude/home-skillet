@@ -61,24 +61,36 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received');
-  if (server) {
-    server.close(() => {
-      console.log('HTTP server closed');
-      process.exit(0);
-    });
+const gracefulShutdown = async (signal) => {
+  console.log(`${signal} received`);
+  
+  try {
+    // Close HTTP server
+    if (server) {
+      await new Promise((resolve) => {
+        server.close(() => {
+          console.log('HTTP server closed');
+          resolve();
+        });
+      });
+    }
+    
+    // Close database connections
+    const db = require('./config/database');
+    if (db && db.destroy) {
+      await db.destroy();
+      console.log('Database connections closed');
+    }
+    
+    console.log('Graceful shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during graceful shutdown:', error);
+    process.exit(1);
   }
-});
+};
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received');
-  if (server) {
-    server.close(() => {
-      console.log('HTTP server closed');
-      process.exit(0);
-    });
-  }
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = server;

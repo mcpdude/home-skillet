@@ -12,8 +12,17 @@ const { generateToken, authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Test endpoint to check database connectivity
+// Test endpoint to check database connectivity (disabled in production)
 router.get('/test-db', async (req, res) => {
+  // Skip database test in production to avoid connection pool issues
+  if (process.env.NODE_ENV === 'production') {
+    return res.json({
+      success: true,
+      message: 'Database test disabled in production',
+      environment: 'production'
+    });
+  }
+  
   try {
     console.log('Testing database connection...');
     const result = await db('users').count('id as count').first();

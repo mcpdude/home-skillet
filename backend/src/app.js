@@ -17,9 +17,9 @@ const userRoutes = require('./routes/users');
 const maintenanceRoutes = require('./routes/maintenance');
 // const photoRoutes = require('./routes/photos'); // Temporarily disabled for Railway deployment
 const reportRoutes = require('./routes/reports');
-const documentRoutes = require('./routes/documents-no-upload'); // Temporary - no file uploads
+const documentsNoUploadRoutes = require('./routes/documents-no-upload'); // Temporary - no file uploads
 const uploadRoutes = require('./routes/upload'); // Direct Supabase uploads
-const insuranceRoutes = require('./routes/insurance-no-upload'); // Direct upload version
+const insuranceNoUploadRoutes = require('./routes/insurance-no-upload'); // Direct upload version
 
 const app = express();
 
@@ -99,7 +99,7 @@ app.get('/health/db-test', async (req, res) => {
   try {
     const { Client } = require('pg');
     const client = new Client({
-      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+      host: 'yrkbpbwwewjjdmsspifl.supabase.co',
       port: 5432,
       database: 'postgres',
       user: 'postgres',
@@ -194,7 +194,7 @@ app.get('/health/db-simple', async (req, res) => {
     // Test connection using pg directly (bypassing Knex) with IPv4
     const { Client } = require('pg');
     const client = new Client({
-      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+      host: 'yrkbpbwwewjjdmsspifl.supabase.co',
       port: 5432,
       database: 'postgres',
       user: 'postgres',
@@ -232,9 +232,9 @@ app.use(`/api/${apiVersion}/tasks`, taskRoutes);
 app.use(`/api/${apiVersion}/users`, userRoutes);
 app.use(`/api/${apiVersion}/maintenance-schedules`, maintenanceRoutes);
 app.use(`/api/${apiVersion}/reports`, reportRoutes);
-app.use(`/api/${apiVersion}/documents`, documentRoutes);
+app.use(`/api/${apiVersion}/documents`, documentsNoUploadRoutes);
 app.use(`/api/${apiVersion}/upload`, uploadRoutes);
-app.use(`/api/${apiVersion}/insurance`, insuranceRoutes);
+app.use(`/api/${apiVersion}/insurance`, insuranceNoUploadRoutes);
 // app.use(`/api/${apiVersion}`, photoRoutes); // Temporarily disabled
 
 // Handle 404 errors

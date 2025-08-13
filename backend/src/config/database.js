@@ -10,12 +10,20 @@ const config = {
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      connectionTimeout: 60000,
+      keepAlive: true,
+      keepAliveInitialDelay: 0
     },
     pool: {
-      min: 2,
-      max: 10,
-      acquireTimeoutMillis: 60000,
-      idleTimeoutMillis: 600000,
+      min: 0,
+      max: 5,
+      acquireTimeoutMillis: 120000,
+      idleTimeoutMillis: 30000,
+      createTimeoutMillis: 60000,
+      destroyTimeoutMillis: 5000,
+      reapIntervalMillis: 1000,
+      createRetryIntervalMillis: 200,
+      propagateCreateError: false
     },
     migrations: {
       directory: __dirname + '/../migrations',
@@ -55,21 +63,26 @@ const config = {
       // Force IPv4 DNS resolution
       family: 4,
       keepAlive: true,
-      keepAliveInitialDelay: 0
+      keepAliveInitialDelay: 0,
+      connectionTimeoutMillis: 60000,
+      requestTimeout: 60000,
+      statement_timeout: 60000,
+      idle_in_transaction_session_timeout: 60000
     },
     pool: {
-      min: 1,
-      max: 5,
-      acquireTimeoutMillis: 20000,
-      idleTimeoutMillis: 300000,
-      createTimeoutMillis: 10000,
+      min: 0,
+      max: 1,
+      acquireTimeoutMillis: 60000,
+      idleTimeoutMillis: 10000,
+      createTimeoutMillis: 60000,
       destroyTimeoutMillis: 5000,
       reapIntervalMillis: 1000,
-      createRetryIntervalMillis: 200,
+      createRetryIntervalMillis: 500,
+      propagateCreateError: false
     },
     // Force IPv4 for Railway
     asyncStackTraces: false,
-    acquireConnectionTimeout: 20000,
+    acquireConnectionTimeout: 30000,
     migrations: {
       directory: __dirname + '/../migrations',
       tableName: 'knex_migrations'
