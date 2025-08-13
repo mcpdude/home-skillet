@@ -45,13 +45,17 @@ const config = {
   },
   production: {
     client: 'pg',
-    connection: process.env.SUPABASE_DB_URL || {
-      host: 'db.yrkbpbwwewjjdmsspifl.supabase.co',
+    connection: {
+      host: 'yrkbpbwwewjjdmsspifl.supabase.co',
       port: 5432,
       database: 'postgres',
       user: 'postgres',
       password: 'lk5FPenvv8yk4nqY',
       ssl: { rejectUnauthorized: false },
+      // Force IPv4 DNS resolution
+      family: 4,
+      keepAlive: true,
+      keepAliveInitialDelay: 0
     },
     pool: {
       min: 1,
