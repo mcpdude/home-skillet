@@ -72,13 +72,14 @@ const config = {
     pool: {
       min: 0,
       max: 1,
-      acquireTimeoutMillis: 60000,
-      idleTimeoutMillis: 10000,
-      createTimeoutMillis: 60000,
-      destroyTimeoutMillis: 5000,
-      reapIntervalMillis: 1000,
-      createRetryIntervalMillis: 500,
-      propagateCreateError: false
+      acquireTimeoutMillis: 120000,
+      idleTimeoutMillis: 5000,
+      createTimeoutMillis: 120000,
+      destroyTimeoutMillis: 10000,
+      reapIntervalMillis: 500,
+      createRetryIntervalMillis: 1000,
+      propagateCreateError: false,
+      log: (message, logLevel) => console.log('Pool:', logLevel, message)
     },
     // Force IPv4 for Railway
     asyncStackTraces: false,

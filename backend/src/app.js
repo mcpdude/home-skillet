@@ -10,6 +10,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Routes
 const authRoutes = require('./routes/auth');
+const authSupabaseRoutes = require('./routes/auth-supabase');
 const propertyRoutes = require('./routes/properties');
 const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
@@ -226,6 +227,7 @@ app.get('/health/db-simple', async (req, res) => {
 // API routes
 const apiVersion = process.env.API_VERSION || 'v1';
 app.use(`/api/${apiVersion}/auth`, authRoutes);
+app.use(`/api/${apiVersion}/auth`, authSupabaseRoutes);
 app.use(`/api/${apiVersion}/properties`, propertyRoutes);
 app.use(`/api/${apiVersion}/projects`, projectRoutes);
 app.use(`/api/${apiVersion}/tasks`, taskRoutes);
