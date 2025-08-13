@@ -1,6 +1,20 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
+const { createClient } = require('@supabase/supabase-js');
 const { createResponse, createErrorResponse, sanitizeUser } = require('../utils/helpers');
+
+// Initialize Supabase client for direct API calls
+let supabase = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+} catch (error) {
+  console.error('Failed to initialize Supabase client in auth middleware:', error);
+}
 
 /**
  * Generate JWT token for user
@@ -48,8 +62,35 @@ const authenticate = async (req, res, next) => {
       return res.status(statusCode).json(createResponse(false, null, error));
     }
     
-    // Find user in database
-    const dbUser = await db('users').where('id', decoded.id).first();
+    // Find user - try Supabase first, fallback to direct DB
+    let dbUser = null;
+    let useDirectDB = false;
+
+    if (supabase) {
+      try {
+        const { data: users, error: supabaseError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', decoded.id)
+          .limit(1);
+        
+        if (supabaseError || !users || users.length === 0) {
+          console.log('Supabase auth query failed, falling back to direct DB:', supabaseError?.message);
+          useDirectDB = true;
+        } else {
+          dbUser = users[0];
+        }
+      } catch (error) {
+        console.log('Supabase auth query error, falling back to direct DB:', error.message);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+
+    if (!dbUser && useDirectDB) {
+      dbUser = await db('users').where('id', decoded.id).first();
+    }
     
     if (!dbUser) {
       const { error, statusCode } = createErrorResponse('User not found', 401);
@@ -110,8 +151,33 @@ const validatePropertyAccess = async (req, res, next) => {
     return res.status(statusCode).json(createResponse(false, null, error));
   }
   
-  // Find the property
-  const dbProperty = await db('properties').where('id', propertyId).first();
+  // Find the property - try Supabase first, fallback to direct DB
+  let dbProperty = null;
+  let useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: properties, error: supabaseError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', propertyId)
+        .limit(1);
+      
+      if (supabaseError || !properties || properties.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbProperty = properties[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbProperty && useDirectDB) {
+    dbProperty = await db('properties').where('id', propertyId).first();
+  }
   
   if (!dbProperty) {
     const { error, statusCode } = createErrorResponse('Property not found', 404);
@@ -141,13 +207,39 @@ const validatePropertyAccess = async (req, res, next) => {
     return next();
   }
   
-  // Check if user has been granted access
-  const dbUserRole = await db('property_permissions')
-    .where({
-      user_id: req.user.id,
-      property_id: propertyId
-    })
-    .first();
+  // Check if user has been granted access - try Supabase first, fallback to direct DB
+  let dbUserRole = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: permissions, error: supabaseError } = await supabase
+        .from('property_permissions')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .eq('property_id', propertyId)
+        .limit(1);
+      
+      if (supabaseError || !permissions || permissions.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbUserRole = permissions[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbUserRole && useDirectDB) {
+    dbUserRole = await db('property_permissions')
+      .where({
+        user_id: req.user.id,
+        property_id: propertyId
+      })
+      .first();
+  }
   
   if (!dbUserRole) {
     const { error, statusCode } = createErrorResponse('Access denied to this property', 403);
@@ -251,8 +343,33 @@ const validateProjectAccess = async (req, res, next) => {
     return res.status(statusCode).json(createResponse(false, null, error));
   }
   
-  // Find the project
-  const dbProject = await db('projects').where('id', projectId).first();
+  // Find the project - try Supabase first, fallback to direct DB
+  let dbProject = null;
+  let useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: projects, error: supabaseError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .limit(1);
+      
+      if (supabaseError || !projects || projects.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbProject = projects[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbProject && useDirectDB) {
+    dbProject = await db('projects').where('id', projectId).first();
+  }
   
   if (!dbProject) {
     const { error, statusCode } = createErrorResponse('Project not found', 404);
@@ -277,8 +394,33 @@ const validateProjectAccess = async (req, res, next) => {
     updatedAt: dbProject.updated_at
   };
   
-  // Find the property this project belongs to
-  const dbProperty = await db('properties').where('id', project.propertyId).first();
+  // Find the property this project belongs to - try Supabase first, fallback to direct DB
+  let dbProperty = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: properties, error: supabaseError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', project.propertyId)
+        .limit(1);
+      
+      if (supabaseError || !properties || properties.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbProperty = properties[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbProperty && useDirectDB) {
+    dbProperty = await db('properties').where('id', project.propertyId).first();
+  }
   
   if (!dbProperty) {
     const { error, statusCode } = createErrorResponse('Property not found', 404);
@@ -308,13 +450,39 @@ const validateProjectAccess = async (req, res, next) => {
     return next();
   }
   
-  // Check if user is assigned to this project
-  const dbProjectAssignment = await db('project_assignments')
-    .where({
-      user_id: req.user.id,
-      project_id: projectId
-    })
-    .first();
+  // Check if user is assigned to this project - try Supabase first, fallback to direct DB
+  let dbProjectAssignment = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: assignments, error: supabaseError } = await supabase
+        .from('project_assignments')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .eq('project_id', projectId)
+        .limit(1);
+      
+      if (supabaseError || !assignments || assignments.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbProjectAssignment = assignments[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbProjectAssignment && useDirectDB) {
+    dbProjectAssignment = await db('project_assignments')
+      .where({
+        user_id: req.user.id,
+        project_id: projectId
+      })
+      .first();
+  }
   
   if (dbProjectAssignment) {
     const projectAssignment = {
@@ -332,13 +500,39 @@ const validateProjectAccess = async (req, res, next) => {
     return next();
   }
   
-  // Check if user has property-level access
-  const dbUserRole = await db('property_permissions')
-    .where({
-      user_id: req.user.id,
-      property_id: property.id
-    })
-    .first();
+  // Check if user has property-level access - try Supabase first, fallback to direct DB
+  let dbUserRole = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: permissions, error: supabaseError } = await supabase
+        .from('property_permissions')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .eq('property_id', property.id)
+        .limit(1);
+      
+      if (supabaseError || !permissions || permissions.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbUserRole = permissions[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbUserRole && useDirectDB) {
+    dbUserRole = await db('property_permissions')
+      .where({
+        user_id: req.user.id,
+        property_id: property.id
+      })
+      .first();
+  }
   
   if (!dbUserRole) {
     const { error, statusCode } = createErrorResponse('Access denied to this project', 403);
@@ -372,8 +566,33 @@ const validateMaintenanceAccess = async (req, res, next) => {
     return res.status(statusCode).json(createResponse(false, null, error));
   }
   
-  // Find the maintenance schedule
-  const dbSchedule = await db('maintenance_schedules').where('id', scheduleId).first();
+  // Find the maintenance schedule - try Supabase first, fallback to direct DB
+  let dbSchedule = null;
+  let useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: schedules, error: supabaseError } = await supabase
+        .from('maintenance_schedules')
+        .select('*')
+        .eq('id', scheduleId)
+        .limit(1);
+      
+      if (supabaseError || !schedules || schedules.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbSchedule = schedules[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbSchedule && useDirectDB) {
+    dbSchedule = await db('maintenance_schedules').where('id', scheduleId).first();
+  }
   
   if (!dbSchedule) {
     const { error, statusCode } = createErrorResponse('Maintenance schedule not found', 404);
@@ -399,8 +618,33 @@ const validateMaintenanceAccess = async (req, res, next) => {
     updatedAt: dbSchedule.updated_at
   };
   
-  // Find the property this schedule belongs to
-  const dbProperty = await db('properties').where('id', schedule.propertyId).first();
+  // Find the property this schedule belongs to - try Supabase first, fallback to direct DB
+  let dbProperty = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: properties, error: supabaseError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', schedule.propertyId)
+        .limit(1);
+      
+      if (supabaseError || !properties || properties.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbProperty = properties[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbProperty && useDirectDB) {
+    dbProperty = await db('properties').where('id', schedule.propertyId).first();
+  }
   
   if (!dbProperty) {
     const { error, statusCode } = createErrorResponse('Property not found', 404);
@@ -430,13 +674,39 @@ const validateMaintenanceAccess = async (req, res, next) => {
     return next();
   }
   
-  // Check if user has property-level access
-  const dbUserRole = await db('property_permissions')
-    .where({
-      user_id: req.user.id,
-      property_id: property.id
-    })
-    .first();
+  // Check if user has property-level access - try Supabase first, fallback to direct DB
+  let dbUserRole = null;
+  useDirectDB = false;
+
+  if (supabase) {
+    try {
+      const { data: permissions, error: supabaseError } = await supabase
+        .from('property_permissions')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .eq('property_id', property.id)
+        .limit(1);
+      
+      if (supabaseError || !permissions || permissions.length === 0) {
+        useDirectDB = true;
+      } else {
+        dbUserRole = permissions[0];
+      }
+    } catch (error) {
+      useDirectDB = true;
+    }
+  } else {
+    useDirectDB = true;
+  }
+
+  if (!dbUserRole && useDirectDB) {
+    dbUserRole = await db('property_permissions')
+      .where({
+        user_id: req.user.id,
+        property_id: property.id
+      })
+      .first();
+  }
   
   if (!dbUserRole) {
     const { error, statusCode } = createErrorResponse('Access denied to this maintenance schedule', 403);
