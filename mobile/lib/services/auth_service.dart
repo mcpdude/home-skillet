@@ -289,7 +289,7 @@ class AuthService {
         '${ApiConfig.authEndpoint}/reset-password',
         data: {
           'token': token,
-          'new_password': newPassword,
+          'newPassword': newPassword,
         },
       );
 

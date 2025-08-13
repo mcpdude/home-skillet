@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/properties/property_list_screen.dart';
 import '../screens/properties/property_detail_screen.dart';
@@ -35,7 +36,8 @@ class AppRouter {
         final isOnSplash = state.matchedLocation == AppRoutes.splash;
         final isOnAuth = state.matchedLocation.startsWith('/login') ||
                         state.matchedLocation.startsWith('/register') ||
-                        state.matchedLocation.startsWith('/forgot-password');
+                        state.matchedLocation.startsWith('/forgot-password') ||
+                        state.matchedLocation.startsWith('/reset-password');
 
         // Show splash while checking auth status
         if (isAuthenticating && !isOnSplash) {
@@ -78,6 +80,13 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.forgotPassword,
           builder: (context, state) => const ForgotPasswordScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.resetPassword,
+          builder: (context, state) {
+            final token = state.uri.queryParameters['token'] ?? '';
+            return ResetPasswordScreen(token: token);
+          },
         ),
 
         // Main App Shell
