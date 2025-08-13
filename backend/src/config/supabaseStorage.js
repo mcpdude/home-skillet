@@ -1,5 +1,4 @@
 const { createClient } = require('@supabase/supabase-js');
-const sharp = require('sharp');
 
 // Initialize Supabase client with service role for storage operations
 const supabase = createClient(
@@ -85,39 +84,12 @@ async function initializeStorageBuckets() {
 }
 
 /**
- * Compress and optimize image before upload
+ * Image optimization disabled - using direct uploads
+ * Sharp module removed to eliminate Railway deployment issues
  */
 async function optimizeImage(buffer, options = {}) {
-  const {
-    width = 1920,
-    height = 1080,
-    quality = 80,
-    format = 'jpeg'
-  } = options;
-
-  try {
-    let pipeline = sharp(buffer);
-
-    // Resize image if it's larger than specified dimensions
-    pipeline = pipeline.resize(width, height, {
-      fit: 'inside',
-      withoutEnlargement: true
-    });
-
-    // Apply format-specific optimization
-    if (format === 'jpeg' || format === 'jpg') {
-      pipeline = pipeline.jpeg({ quality, progressive: true });
-    } else if (format === 'png') {
-      pipeline = pipeline.png({ compressionLevel: 6 });
-    } else if (format === 'webp') {
-      pipeline = pipeline.webp({ quality });
-    }
-
-    return await pipeline.toBuffer();
-  } catch (error) {
-    console.error('Error optimizing image:', error);
-    return buffer; // Return original buffer if optimization fails
-  }
+  // Return original buffer - no server-side image processing
+  return buffer;
 }
 
 /**

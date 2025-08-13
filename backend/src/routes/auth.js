@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
+const { createClient } = require('@supabase/supabase-js');
 const { userSchemas } = require('../utils/validation');
 const { 
   formatValidationError, 
@@ -11,6 +12,12 @@ const {
 const { generateToken, authenticate } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Initialize Supabase client for direct API calls
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // Test endpoint to check database connectivity (disabled in production)
 router.get('/test-db', async (req, res) => {
@@ -130,18 +137,29 @@ router.post('/login', async (req, res) => {
     const { email, password } = value;
     console.log('Validated input:', { email, hasPassword: !!password });
 
-    // Find user by email
-    console.log('Querying database for user:', email);
-    const dbUser = await db('users')
-      .where(db.raw('LOWER(email) = LOWER(?)', [email]))
-      .first();
-    console.log('Database query result:', { found: !!dbUser, userId: dbUser?.id });
+    // Find user by email using Supabase client (bypasses connection pool)
+    console.log('Querying Supabase for user:', email);
+    const { data: users, error: supabaseError } = await supabase
+      .from('users')
+      .select('*')
+      .ilike('email', email)
+      .limit(1);
     
-    if (!dbUser) {
+    if (supabaseError) {
+      console.error('Supabase query error:', supabaseError);
+      const { error: errorObj, statusCode } = createErrorResponse('Database error', 500);
+      return res.status(statusCode).json(createResponse(false, null, errorObj));
+    }
+    
+    console.log('Supabase query result:', { found: users?.length > 0, userId: users?.[0]?.id });
+    
+    if (!users || users.length === 0) {
       console.log('User not found in database');
       const { error: errorObj, statusCode } = createErrorResponse('Invalid credentials', 401);
       return res.status(statusCode).json(createResponse(false, null, errorObj));
     }
+    
+    const dbUser = users[0];
     
     // Transform to expected format
     const user = {
@@ -165,10 +183,17 @@ router.post('/login', async (req, res) => {
     // Generate JWT token
     const token = generateToken(user);
 
-    // Update last login
-    await db('users')
-      .where('id', user.id)
-      .update({ last_login_at: new Date() });
+    // Update last login using Supabase client
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', user.id);
+    
+    if (updateError) {
+      console.warn('Failed to update last login:', updateError);
+      // Don't fail the login for this
+    }
+    
     user.lastLoginAt = new Date().toISOString();
 
     // Return response
