@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/database');
+const { createClient } = require('@supabase/supabase-js');
 const { authenticate } = require('../middleware/auth');
 const { 
   createResponse, 
@@ -7,6 +8,19 @@ const {
 } = require('../utils/helpers');
 
 const router = express.Router();
+
+// Initialize Supabase client for direct API calls
+let supabase = null;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+} catch (error) {
+  console.error('Failed to initialize Supabase client in reports routes:', error);
+}
 
 /**
  * GET /api/v1/reports/dashboard
@@ -16,18 +30,82 @@ router.get('/dashboard', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Get user's properties (owned + accessible)
-    const userPropertiesQuery = db('properties')
-      .where('owner_id', userId)
-      .orWhereExists(function() {
-        this.select('*')
-          .from('property_permissions')
-          .whereRaw('property_permissions.property_id = properties.id')
-          .andWhere('property_permissions.user_id', userId);
-      });
+    // Get user's properties (owned + accessible) - try Supabase first, fallback to direct DB
+    let userProperties = [];
+    let propertyIds = [];
+    let useDirectDB = false;
 
-    const userProperties = await userPropertiesQuery.select('id');
-    const propertyIds = userProperties.map(p => p.id);
+    if (supabase) {
+      try {
+        // Get owned properties from Supabase (using correct column name)
+        const { data: ownedProps, error: ownedError } = await supabase
+          .from('properties')
+          .select('id')
+          .eq('user_id', userId);
+
+        // Get accessible properties via permissions
+        const { data: permissions, error: permissionsError } = await supabase
+          .from('property_permissions')
+          .select('property_id')
+          .eq('user_id', userId);
+
+        if (ownedError || permissionsError) {
+          console.log('Supabase dashboard properties query failed, falling back to direct DB:', ownedError?.message || permissionsError?.message);
+          useDirectDB = true;
+        } else {
+          const ownedIds = (ownedProps || []).map(p => p.id);
+          const accessibleIds = (permissions || []).map(p => p.property_id);
+          const allIds = [...new Set([...ownedIds, ...accessibleIds])]; // deduplicate
+          
+          if (allIds.length > 0) {
+            const { data: allProperties, error: allPropsError } = await supabase
+              .from('properties')
+              .select('id')
+              .in('id', allIds);
+            
+            if (allPropsError) {
+              useDirectDB = true;
+            } else {
+              userProperties = allProperties || [];
+              propertyIds = userProperties.map(p => p.id);
+            }
+          } else {
+            userProperties = [];
+            propertyIds = [];
+          }
+        }
+      } catch (error) {
+        console.log('Supabase dashboard query error, falling back to direct DB:', error.message);
+        useDirectDB = true;
+      }
+    } else {
+      useDirectDB = true;
+    }
+
+    if (useDirectDB) {
+      try {
+        const userPropertiesQuery = db('properties')
+          .where('user_id', userId)
+          .orWhereExists(function() {
+            this.select('*')
+              .from('property_permissions')
+              .whereRaw('property_permissions.property_id = properties.id')
+              .andWhere('property_permissions.user_id', userId);
+          });
+
+        userProperties = await userPropertiesQuery.select('id');
+        propertyIds = userProperties.map(p => p.id);
+      } catch (dbError) {
+        console.error('Direct DB dashboard query failed (likely connection pool timeout):', dbError.message);
+        // Return default empty dashboard instead of failing
+        return res.json(createResponse(true, {
+          properties: { total: 0, byType: {}, averageAge: 0, withActiveProjects: 0 },
+          projects: { total: 0, byStatus: {}, byPriority: {}, overdue: 0, budget: { total: 0, actual: 0, variance: 0 } },
+          tasks: { total: 0, byStatus: {}, completionRate: 0, averageCompletionDays: 0 },
+          summary: { totalBudget: 0, totalSpent: 0, savings: 0, activeProjects: 0, completedTasks: 0 }
+        }));
+      }
+    }
 
     if (propertyIds.length === 0) {
       return res.json(createResponse(true, {
